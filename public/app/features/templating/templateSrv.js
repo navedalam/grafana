@@ -149,7 +149,9 @@ function (angular, _, kbn) {
     };
 
     this.getAllValue = function(variable) {
-      if (variable.allValue) {
+      if (variable.allValue && "*" === variable.allValue) {
+        return 'RemoveWildcard';
+      } else if (variable.allValue) {
         return variable.allValue;
       }
       var values = [];
@@ -177,6 +179,8 @@ function (angular, _, kbn) {
 
         if (!variable) {
           return match;
+        } else if('*' === value) {
+          return 'RemoveWildcard';
         }
 
         systemValue = self._grafanaVariables[variable.current.value];

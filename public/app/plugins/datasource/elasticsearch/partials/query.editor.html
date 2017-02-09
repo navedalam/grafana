@@ -9,6 +9,15 @@
 			<label class="gf-form-label query-keyword">Alias</label>
 			<input type="text" class="gf-form-input" ng-model="ctrl.target.alias" spellcheck='false' placeholder="alias patterns" ng-blur="ctrl.refresh()">
 		</div>
+		<div class="gf-form max-width-15">
+			<label class="gf-form-label query-keyword">Time Shift</label>
+			<input type="text" class="gf-form-input" ng-model="ctrl.target.timeShiftComparison" spellcheck='false' placeholder="time shift" ng-blur="ctrl.refresh()">
+		</div>
+		<div class="gf-form max-width-10">
+			<label class="gf-form-label query-keyword">Show Markers</label>
+			<input type="checkbox" class="tight-form-input" style="width: 80px;" ng-model="ctrl.target.marker" spellcheck='false' placeholder="(Y=show)" ng-blur="ctrl.refresh()">
+		</div>
+
 	</div>
 
 	<div ng-repeat="agg in ctrl.target.metrics">
