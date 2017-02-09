@@ -7,8 +7,9 @@ define([
   './index_pattern',
   './elastic_response',
   './query_ctrl',
+  './time',
 ],
-function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticResponse) {
+function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticResponse, a, time) {
   'use strict';
 
   /** @ngInject */
@@ -190,6 +191,24 @@ function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticRes
       var payload = "";
       var target;
       var sentTargets = [];
+      options.calcMetric = {};
+      options.calcMetric.status = false;
+      options.calcMetric.formulas = [];
+      options.calcMetric.queries = [];
+      options.calcMetric.typeDate = [];
+      options.timeShift = {};
+      options.mtd = {};
+      options.mtd.queryList = [];
+      options.mtd.targetList = [];
+
+      for (var target_index = 0; target_index < options.targets.length; target_index++) {
+        target = options.targets[target_index];
+        if(target.metrics) {
+          if(target.metrics[0].type === 'calc_metric') {
+            options.calcMetric.status = true;
+          }
+        }
+      }
 
       // add global adhoc filters to timeFilter
       var adhocFilters = templateSrv.getAdhocFilters(this.name);
@@ -199,14 +218,58 @@ function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticRes
         if (target.hide) {continue;}
 
         var queryString = templateSrv.replace(target.query || '*', options.scopedVars, 'lucene');
+        queryString = queryString.replace(" and ", " AND ").replace(" or "," OR ").replace(" not "," NOT ");
+        queryString = queryString.replace(new RegExp("[AND |OR |OR NOT |AND NOT ]*[A-Za-z_0-9]*:aRemoveWildcarda","gm"),"");
+        queryString = queryString.trim();
+        if(queryString.startsWith('AND') || queryString.startsWith("OR")){
+          queryString = queryString.substr(queryString.indexOf(" ") + 1);
+        }
+        if(queryString === ""){
+          queryString = "*";
+        }
         var queryObj = this.queryBuilder.build(target, adhocFilters, queryString);
         var esQuery = angular.toJson(queryObj);
 
         var searchType = (queryObj.size === 0 && this.esVersion < 5) ? 'count' : 'query_then_fetch';
         var header = this.getQueryHeader(searchType, options.range.from, options.range.to);
-        payload +=  header + '\n';
+        //payload +=  header + '\n';
 
-        payload += esQuery + '\n';
+        //payload += esQuery + '\n';
+        var tempPayload="";
+        if(target.metrics) {
+          if(target.metrics[0].type === 'calc_metric') {
+            tempPayload += "";
+            if(!target.metrics[0].formula || target.metrics[0].formula === "") {
+              target.metrics[0].formula = "query1 * 1";
+            }
+            options.calcMetric.queries.push(i);
+            options.calcMetric.formulas.push(target.metrics[0].formula);
+            if(target.bucketAggs[0].type === "date_histogram") {
+              options.calcMetric.typeDate.push(true);
+            }
+            else {
+              options.calcMetric.typeDate.push(false);
+            }
+          } else if(options.targets[0].editQueryMode) {
+            tempPayload += options.targets[0].rawQuery.replace(/(\r\n|\n|\r)/gm,"") + '\n';
+            tempPayload +=  header + '\n';
+          } else {
+            tempPayload +=  header + '\n';
+            tempPayload += esQuery + '\n';
+          }
+
+        }
+        if(target.timeShiftComparison && target.timeShiftComparison !== "") {
+          tempPayload = tempPayload.replace(/\$interval/g, options.interval);
+          tempPayload = tempPayload.replace(/\$timeFrom/g, options.range.from.valueOf() - time.calcTimeShift(target.timeShiftComparison) + 5.5*3600000);
+          tempPayload = tempPayload.replace(/\$timeTo/g, options.range.to.valueOf() - time.calcTimeShift(target.timeShiftComparison)  + 5.5*3600000);
+          options.timeShift[i] = time.calcTimeShift(target.timeShiftComparison);
+        } else {
+          tempPayload = tempPayload.replace(/\$interval/g, options.interval);
+          tempPayload = tempPayload.replace(/\$timeFrom/g, options.range.from.valueOf() + 5.5*3600000);
+          tempPayload = tempPayload.replace(/\$timeTo/g, options.range.to.valueOf() + 5.5*3600000);
+        }
+        payload += tempPayload;
         sentTargets.push(target);
       }
 
@@ -219,6 +282,95 @@ function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticRes
       payload = templateSrv.replace(payload, options.scopedVars);
 
       return this._post('_msearch', payload).then(function(res) {
+        for (i=0;i<res.responses.length;i++) {
+          if(options.timeShift.hasOwnProperty(i) && options.targets[i].bucketAggs[0].type === "date_histogram") {
+            var tmp = res.responses[i].aggregations[2].buckets;
+            Object.keys(tmp).forEach(function(key) {
+              tmp[key]['key'] = tmp[key]['key']+ options.timeShift[i];
+              tmp[key]['key_as_string'] = tmp[key]['key'].toString();
+            });
+          }
+        }
+        if(options.calcMetric.status) {
+          options.calcMetric.status = false;
+          var resArr = [];
+          for (i=0;i<res.responses.length;i++) {
+            if(options.calcMetric.queries.indexOf(i)>=0) {
+              continue;
+            }
+            var responses = res.responses[i].aggregations[Object.keys(res.responses[i].aggregations)[0]].buckets;
+            var customMetric = {};
+            Object.keys(responses).forEach(function(response) {
+              var metricValue = 0;
+              var keys = Object.keys(responses[response]);
+              if(keys.length === 3) {
+                metricValue = responses[response].doc_count;
+              } else {
+                for(var elm = keys.length-1; elm--;) {
+                  if (keys[elm] === "doc_count" || keys[elm] === 'key' || keys[elm] === 'key_as_string') {
+                    keys.splice(elm, 1);
+                  }
+                }
+                metricValue = responses[response][keys[0]].value;
+              }
+              if(customMetric[responses[response].key]) {
+                customMetric[responses[response].key] += metricValue;
+              } else {
+                customMetric[responses[response].key] = metricValue;
+              }
+            });
+            resArr.push(customMetric);
+          }
+          var resMap = {};
+          var keySet = new Set();
+          for (i=0;i<resArr.length;i++) {
+            Object.keys(resArr[i]).forEach(function(key) {
+              keySet.add(key);
+            });
+          }
+          for (i=0;i<resArr.length;i++) {
+            for(var key of keySet) {
+              if(!resArr[i].hasOwnProperty(key)) {
+                resArr[i][key]=0;
+              }
+              if(resMap[key]) {
+                resMap[key].push(resArr[i][key]);
+              } else {
+                var arr = [];
+                arr[0]=resArr[i][key];
+                resMap[key] = arr;
+              }
+            }
+          }
+          for(var k=0;k<options.calcMetric.formulas.length;k++) {
+            var formula = options.calcMetric.formulas[k];
+            for(i=res.responses.length;i>0;i--) {
+              var re = new RegExp("query"+(i), 'g');
+              formula = formula.replace(re,"resMap[n]["+(i-1)+"]");
+            }
+            var finalMap = {};
+            for (var n in resMap) {
+              if (resMap.hasOwnProperty(n) && resMap[n].length === resArr.length) {
+                finalMap[n] = eval(formula);
+              }
+            }
+            var sortedKeys = Object.keys(finalMap).sort();
+            var tempBucket = [];
+            for (i = 0; i< sortedKeys.length;i++) {
+              var tempObj = {};
+              if(options.calcMetric.typeDate[k]) {
+                tempObj = {"key": parseInt(sortedKeys[i]), "key_as_string": sortedKeys[i].toString(), "doc_count": 0, "1": {"value": finalMap[sortedKeys[i]]}};
+              } else {
+                tempObj = {"key": sortedKeys[i], "key_as_string": sortedKeys[i].toString(), "doc_count": 0, "1": {"value": finalMap[sortedKeys[i]]}};
+              }
+              tempBucket.push(tempObj);
+            }
+            var tempRes = (JSON.parse(JSON.stringify(res.responses[0])));
+            tempRes.aggregations[2].buckets = tempBucket;
+            tempRes.aggregations.isCustom = true;
+            res.responses.push(tempRes);
+          }
+        }
         return new ElasticResponse(sentTargets, res).getTimeSeries();
       });
     };
