@@ -102,6 +102,11 @@ function (angular, _, queryDef) {
           $scope.updateMovingAvgModelSettings();
           break;
         }
+        case 'calc_metric' : {
+          $scope.settingsLinkText = "Options";
+          $scope.showOptions = !$scope.showOptions;
+          break;
+        }
         case 'raw_document': {
           $scope.target.metrics = [$scope.agg];
           $scope.target.bucketAggs = [];
@@ -186,6 +191,17 @@ function (angular, _, queryDef) {
       if (!$scope.agg.hide) {
         delete $scope.agg.hide;
       }
+      $scope.onChange();
+    };
+
+    $scope.calculatedMetricOperations = function() {
+      var calc_metric_formula = $scope.agg.formula;
+      if (calc_metric_formula) {
+        $scope.agg.settings.calc_metric_formula = calc_metric_formula;
+      } else {
+        delete $scope.agg.settings.calc_metric_formula;
+      }
+      $scope.validateModel();
       $scope.onChange();
     };
 

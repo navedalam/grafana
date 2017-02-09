@@ -1,8 +1,9 @@
 define([
   "lodash",
-  "./query_def"
+  "./query_def",
+  "./time"
 ],
-function (_, queryDef) {
+function (_, queryDef,time) {
   'use strict';
 
   function ElasticResponse(targets, response) {
@@ -19,13 +20,18 @@ function (_, queryDef) {
         continue;
       }
 
+      var timeShift = 0;
+      if(target.timeShiftComparison && target.timeShiftComparison !== "") {
+        timeShift +=  time.calcTimeShift(target.timeShiftComparison);
+      }
+
       switch(metric.type) {
         case 'count': {
           newSeries = { datapoints: [], metric: 'count', props: props};
           for (i = 0; i < esAgg.buckets.length; i++) {
             bucket = esAgg.buckets[i];
             value = bucket.doc_count;
-            newSeries.datapoints.push([value, bucket.key]);
+            newSeries.datapoints.push([value, bucket.key + timeShift]);
           }
           seriesList.push(newSeries);
           break;
@@ -44,7 +50,7 @@ function (_, queryDef) {
             for (i = 0; i < esAgg.buckets.length; i++) {
               bucket = esAgg.buckets[i];
               var values = bucket[metric.id].values;
-              newSeries.datapoints.push([values[percentileName], bucket.key]);
+              newSeries.datapoints.push([values[percentileName], bucket.key + timeShift]);
             }
             seriesList.push(newSeries);
           }
@@ -67,7 +73,7 @@ function (_, queryDef) {
               stats.std_deviation_bounds_upper = stats.std_deviation_bounds.upper;
               stats.std_deviation_bounds_lower = stats.std_deviation_bounds.lower;
 
-              newSeries.datapoints.push([stats[statName], bucket.key]);
+              newSeries.datapoints.push([stats[statName], bucket.key] + timeShift);
             }
 
             seriesList.push(newSeries);
@@ -83,9 +89,9 @@ function (_, queryDef) {
             value = bucket[metric.id];
             if (value !== undefined) {
               if (value.normalized_value) {
-                newSeries.datapoints.push([value.normalized_value, bucket.key]);
+                newSeries.datapoints.push([value.normalized_value, bucket.key + timeShift]);
               } else {
-                newSeries.datapoints.push([value.value, bucket.key]);
+                newSeries.datapoints.push([value.value, bucket.key + timeShift]);
               }
             }
 
@@ -104,14 +110,15 @@ function (_, queryDef) {
       bucket = esAgg.buckets[i];
       doc = _.defaults({}, props);
       doc[aggDef.field] = bucket.key;
+      var refId = target.refId;
 
       for (y = 0; y < target.metrics.length; y++) {
         metric = target.metrics[y];
 
         switch(metric.type) {
           case "count": {
-            metricName = this._getMetricName(metric.type);
-            doc[metricName] = bucket.doc_count;
+            metricName = metric.type;
+            doc[metricName + " " + refId] = bucket.doc_count;
             break;
           }
           case 'extended_stats': {
@@ -125,14 +132,19 @@ function (_, queryDef) {
               stats.std_deviation_bounds_upper = stats.std_deviation_bounds.upper;
               stats.std_deviation_bounds_lower = stats.std_deviation_bounds.lower;
 
-              metricName = this._getMetricName(statName);
-              doc[metricName] = stats[statName];
+              metricName = statName;
+              doc[metricName + " " + metric.field + " " + refId] = stats[statName];
             }
             break;
           }
+          case "calc_metric": {
+            metricName = metric.type;
+            doc[metricName + " " + metric.formula + " " + refId] = bucket[metric.id].value;
+            break;
+          }
           default:  {
-            metricName = this._getMetricName(metric.type);
-            doc[metricName] =bucket[metric.id].value;
+            metricName = metric.type;
+            doc[metricName + " " + metric.field + " " + refId] =bucket[metric.id].value;
             break;
           }
         }
@@ -305,6 +317,11 @@ function (_, queryDef) {
 
   ElasticResponse.prototype.getTimeSeries = function() {
     var seriesList = [];
+    var options = {};
+    var docs = [];
+    options.docCountList = [];
+    options.hasDocs = false;
+    options.alias = {};
 
     for (var i = 0; i < this.response.responses.length; i++) {
       var response = this.response.responses[i];
@@ -320,20 +337,93 @@ function (_, queryDef) {
         var aggregations = response.aggregations;
         var target = this.targets[i];
         var tmpSeriesList = [];
-        var docs = [];
 
         this.processBuckets(aggregations, target, tmpSeriesList, docs, {}, 0);
         this.trimDatapoints(tmpSeriesList, target);
         this.nameSeries(tmpSeriesList, target);
+
+        options.docCountList[i] = docs.length;
+
+        if(target.alias) {
+          switch(target.metrics[0].type) {
+            case "calc_metric": {
+              options.alias[(target.metrics[0].type + " " + target.metrics[0].formula + " " + target.refId).toLowerCase()] = target.alias;
+              break;
+            }
+            case "count": {
+              options.alias[(target.metrics[0].type + " " + target.refId).toLowerCase()] = target.alias;
+              break;
+            }
+            default: {
+              options.alias[(target.metrics[0].type + " " + target.metrics[0].field + " " + target.refId).toLowerCase()] = target.alias;
+              break;
+            }
+          }
+        }
 
         for (var y = 0; y < tmpSeriesList.length; y++) {
           seriesList.push(tmpSeriesList[y]);
         }
 
         if (seriesList.length === 0 && docs.length > 0) {
+          options.hasDocs = true;
           seriesList.push({target: 'docs', type: 'docs', datapoints: docs});
         }
       }
+    }
+
+    if(options.hasDocs)  {
+      options.columns = {};
+      options.hasDocs = false;
+      for(var j = 0;j< seriesList[0].datapoints.length;j++) {
+        Object.keys(seriesList[0].datapoints[j]).forEach(function(key) {
+          if (Object.prototype.hasOwnProperty.call(options.columns, key)) {
+            options.columns[key] += 1;
+          } else {
+            options.columns[key] = 1;
+          }
+        });
+      }
+      options.groupKey = Object.keys(options.columns).reduce(function(a, b) {
+        return options.columns[a] > options.columns[b] ? a : b;
+      });
+      var documents = {};
+      options.initTarget = this.targets;
+      options.initResponse = this.response;
+      options.multipleGroupedDimension= '';
+      options.queryPointer = 0;
+      options.queryResponseCount = 0;
+      for(var l = 0;l< seriesList[0].datapoints.length;l++) {
+        options.multipleGroupedDimensionArray = [];
+        options.queryResponseCount = options.docCountList[options.queryPointer];
+        if(l === options.queryResponseCount) {
+          options.queryPointer++;
+        }
+        if(options.multipleGroupedDimensionArray.length===0) {
+          options.initTarget[options.queryPointer].bucketAggs.forEach(function(arrElement) {
+            options.multipleGroupedDimensionArray.push(seriesList[0].datapoints[l][arrElement.field]);
+          });
+        }
+        options.multipleGroupedDimension = options.multipleGroupedDimensionArray.join('-');
+        Object.keys(seriesList[0].datapoints[l]).forEach(function(key) {
+          var k = key.toLowerCase();
+          if (Object.prototype.hasOwnProperty.call(options.alias, k)) {
+            k = options.alias[k];
+          }
+          if (Object.prototype.hasOwnProperty.call(documents, options.multipleGroupedDimension)) {
+            documents[options.multipleGroupedDimension][k] = seriesList[0].datapoints[l][key];
+          } else {
+            var tempObj = {};
+            tempObj[k] = seriesList[0].datapoints[l][key];
+            documents[options.multipleGroupedDimension] = tempObj;
+          }
+        });
+      }
+      var datapointsArr = [];
+      Object.keys(documents).forEach(function(key) {
+        datapointsArr.push(documents[key]);
+      });
+      seriesList[0].datapoints = datapointsArr;
     }
 
     return { data: seriesList };

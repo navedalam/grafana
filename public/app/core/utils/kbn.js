@@ -318,6 +318,41 @@ function($, _) {
     };
   };
 
+  // Formatter which scales the unit string geometrically according to the Indian
+  // number system. Repeatedly scales the value down by the factor until it is
+  // less than the factor in magnitude, or the end of the array is reached.
+  kbn.formatBuilders.scaledUnitsIndianNumbers = function(extArray) {
+    return function(size, decimals, scaledDecimals) {
+      if (size === null) {
+        return "";
+      }
+
+      var steps = 0;
+      var limit = extArray.length;
+      var factor = 100;
+      if(Math.abs(size) >= 1000) {
+        steps ++;
+        size /= 1000;
+        while (Math.abs(size) >= factor) {
+          steps++;
+          if (steps >= limit) {
+            steps--;
+            break;
+          }
+          size /= factor;
+
+          if (steps >= limit) { return "NA"; }
+        }
+      }
+
+      if (steps > 0 && scaledDecimals !== null) {
+        decimals = scaledDecimals + (2 * (steps-1)) + 3;
+      }
+
+      return kbn.toFixed(size, decimals) + extArray[steps];
+    };
+  };
+
   // Extension of the scaledUnits builder which uses SI decimal prefixes. If an
   // offset is given, it adjusts the starting units at the given prefix; a value
   // of 0 starts at no scale; -3 drops to nano, +2 starts at mega, etc.
@@ -349,6 +384,16 @@ function($, _) {
     };
   };
 
+  kbn.formatBuilders.currencyINR = function(symbol) {
+    var units = ['', 'K', 'L', 'Cr'];
+    var scaler = kbn.formatBuilders.scaledUnitsIndianNumbers(units);
+    return function(size, decimals, scaledDecimals) {
+      if (size === null) { return ""; }
+      var scaled = scaler(size, decimals, scaledDecimals);
+      return symbol + scaled;
+    };
+  };
+
   kbn.formatBuilders.simpleCountUnit = function(symbol) {
     var units = ['', 'K', 'M', 'B', 'T'];
     var scaler = kbn.formatBuilders.scaledUnits(1000, units);
@@ -362,10 +407,11 @@ function($, _) {
   ///// VALUE FORMATS /////
 
   // Dimensionless Units
-  kbn.valueFormats.none  = kbn.toFixed;
-  kbn.valueFormats.short = kbn.formatBuilders.scaledUnits(1000, ['', ' K', ' Mil', ' Bil', ' Tri', ' Quadr', ' Quint', ' Sext', ' Sept']);
-  kbn.valueFormats.dB    = kbn.formatBuilders.fixedUnit('dB');
-  kbn.valueFormats.ppm   = kbn.formatBuilders.fixedUnit('ppm');
+  kbn.valueFormats.none     = kbn.toFixed;
+  kbn.valueFormats.short    = kbn.formatBuilders.scaledUnits(1000, ['', ' K', ' Mil', ' Bil', ' Tri', ' Quadr', ' Quint', ' Sext', ' Sept']);
+  kbn.valueFormats.shortINR = kbn.formatBuilders.scaledUnitsIndianNumbers(['', 'K', 'L', 'Cr']);
+  kbn.valueFormats.dB       = kbn.formatBuilders.fixedUnit('dB');
+  kbn.valueFormats.ppm      = kbn.formatBuilders.fixedUnit('ppm');
 
   kbn.valueFormats.percent = function(size, decimals) {
     if (size === null) { return ""; }
@@ -400,6 +446,7 @@ function($, _) {
   kbn.valueFormats.currencyEUR = kbn.formatBuilders.currency('€');
   kbn.valueFormats.currencyJPY = kbn.formatBuilders.currency('¥');
   kbn.valueFormats.currencyRUB = kbn.formatBuilders.currency('₽');
+  kbn.valueFormats.currencyINR = kbn.formatBuilders.currencyINR('₹');
 
   // Data (Binary)
   kbn.valueFormats.bits   = kbn.formatBuilders.binarySIPrefix('b');
@@ -702,15 +749,16 @@ function($, _) {
       {
         text: 'none',
         submenu: [
-          {text: 'none' ,             value: 'none'       },
-          {text: 'short',             value: 'short'      },
-          {text: 'percent (0-100)',   value: 'percent'    },
-          {text: 'percent (0.0-1.0)', value: 'percentunit'},
-          {text: 'Humidity (%H)',     value: 'humidity'   },
-          {text: 'ppm',               value: 'ppm'        },
-          {text: 'decibel',           value: 'dB'         },
-          {text: 'hexadecimal (0x)',  value: 'hex0x'      },
-          {text: 'hexadecimal',       value: 'hex'        },
+          {text: 'none' ,                     value: 'none'       },
+          {text: 'short',                     value: 'short'      },
+          {text: 'percent (0-100)',           value: 'percent'    },
+          {text: 'percent (0.0-1.0)',         value: 'percentunit'},
+          {text: 'Humidity (%H)',             value: 'humidity'   },
+          {text: 'ppm',                       value: 'ppm'        },
+          {text: 'decibel',                   value: 'dB'         },
+          {text: 'hexadecimal (0x)',          value: 'hex0x'      },
+          {text: 'hexadecimal',               value: 'hex'        },
+          {text: 'short (Indian Numbering)',  value: 'shortINR'   },
         ]
       },
       {
@@ -721,6 +769,7 @@ function($, _) {
           {text: 'Euro (€)',    value: 'currencyEUR'},
           {text: 'Yen (¥)',     value: 'currencyJPY'},
           {text: 'Rubles (₽)',  value: 'currencyRUB'},
+          {text: 'Rupees (₹)',  value: 'currencyINR'},
         ]
       },
       {

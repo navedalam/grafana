@@ -266,9 +266,22 @@ coreModule.directive('grafanaGraph', function($rootScope, timeSrv) {
           }
         };
 
+        var showSeriesMarkers = [];
+        for (var i = 0; i< panel.targets.length; i++) {
+          if (!panel.targets[i].metrics[0].hide) {
+            showSeriesMarkers.push(i);
+          }
+        }
+
         for (let i = 0; i < data.length; i++) {
           var series = data[i];
           series.data = series.getFlotPairs(series.nullPointMode || panel.nullPointMode);
+          if(panel.targets[showSeriesMarkers[i]] && panel.targets[showSeriesMarkers[i]].marker) {
+            series.marker = panel.targets[showSeriesMarkers[i]].marker;
+          } else {
+            series.marker = false;
+          }
+          
 
           // if hidden remove points and disable stack
           if (ctrl.hiddenSeries[series.alias]) {
@@ -312,6 +325,19 @@ coreModule.directive('grafanaGraph', function($rootScope, timeSrv) {
         function callPlot(incrementRenderCounter) {
           try {
             plot = $.plot(elem, sortedSeries, options);
+            for (var j = 0; j < sortedSeries.length; j++) {
+              if (sortedSeries[j].marker) {
+                $.each(plot.getData()[j].data, function(i, el) {
+                  var o = plot.pointOffset({x: el[0], y: el[1]});
+                  $('<div class="data-point-label'+plot.getData()[j].id+'">' + sortedSeries[j].formatValue(el[1]) + '</div>').css( {
+                    position: 'absolute',
+                    left: o.left + 4,
+                    top: o.top - 23,
+                    display: 'none'
+                  }).appendTo(plot.getPlaceholder()).fadeIn('slow');
+                });
+              }
+            }
             if (ctrl.renderError) {
               delete ctrl.error;
               delete ctrl.inspector;
@@ -353,8 +379,8 @@ coreModule.directive('grafanaGraph', function($rootScope, timeSrv) {
 
       function addTimeAxis(options) {
         var ticks = panelWidth / 100;
-        var min = _.isUndefined(ctrl.range.from) ? null : ctrl.range.from.valueOf();
-        var max = _.isUndefined(ctrl.range.to) ? null : ctrl.range.to.valueOf();
+        var min = _.isUndefined(ctrl.range.from) ? null : ctrl.range.from.valueOf() + 5.5*3600000;
+        var max = _.isUndefined(ctrl.range.to) ? null : ctrl.range.to.valueOf() + 5.5*3600000;
 
         options.xaxis = {
           timezone: dashboard.getTimezone(),
