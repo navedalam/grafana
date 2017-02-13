@@ -66,6 +66,7 @@ function (queryDef) {
     esAgg.field = this.timeField;
     esAgg.min_doc_count = settings.min_doc_count || 0;
     esAgg.extended_bounds = {min: "$timeFrom", max: "$timeTo"};
+    esAgg.offset = "+5h";
     esAgg.format = "epoch_millis";
 
     if (esAgg.interval === 'auto') {
