@@ -49,8 +49,8 @@ export class DashboardModel {
     this.autoUpdate = data.autoUpdate;
     this.description = data.description;
     this.tags = data.tags || [];
-    this.style = data.style || "dark";
-    this.timezone = data.timezone || '';
+    this.style = data.style || "light";
+    this.timezone = data.timezone || 'UTC';
     this.editable = data.editable !== false;
     this.graphTooltip = data.graphTooltip || 0;
     this.hideControls = data.hideControls || false;
