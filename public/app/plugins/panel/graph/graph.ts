@@ -276,19 +276,12 @@ coreModule.directive('grafanaGraph', function($rootScope, timeSrv) {
         for (let i = 0; i < data.length; i++) {
           var series = data[i];
           series.data = series.getFlotPairs(series.nullPointMode || panel.nullPointMode);
-<<<<<<< b460241f1590d1b85d575333a4f4f4f7de44fc6e
+
           if (panel.targets[showSeriesMarkers[i]] && panel.targets[showSeriesMarkers[i]].marker) {
-=======
-          if(panel.targets[showSeriesMarkers[i]] && panel.targets[showSeriesMarkers[i]].marker) {
->>>>>>> Added features
             series.marker = panel.targets[showSeriesMarkers[i]].marker;
           } else {
             series.marker = false;
           }
-<<<<<<< b460241f1590d1b85d575333a4f4f4f7de44fc6e
-=======
-          
->>>>>>> Added features
 
           // if hidden remove points and disable stack
           if (ctrl.hiddenSeries[series.alias]) {
