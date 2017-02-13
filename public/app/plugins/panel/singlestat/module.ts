@@ -38,6 +38,10 @@ class SingleStatCtrl extends MetricsPanelCtrl {
     valueMaps: [
       { value: 'null', op: '=', text: 'N/A' }
     ],
+    deviation: {
+      fontSize: '50%',
+      show: false
+    },
     mappingTypes: [
       {name: 'value to text', value: 1},
       {name: 'range to text', value: 2},
@@ -174,14 +178,28 @@ class SingleStatCtrl extends MetricsPanelCtrl {
     return result;
   }
 
+  getDecimalsForDeviation(value) {
+    if (_.isNumber(this.panel.deviation.decimals)) {
+      return {decimals: this.panel.deviation.decimals, scaledDecimals: null};
+    } else {
+      return { decimals: 2, scaledDecimals: null };
+    }
+  }
+
   setValues(data) {
     data.flotpairs = [];
 
-    if (this.series.length > 1) {
+    if (this.series.length > 1 && ! (this.panel.deviation && this.panel.deviation.show)) {
       var error: any = new Error();
       error.message = 'Multiple Series Error';
       error.data = 'Metric query returns ' + this.series.length +
         ' series. Single Stat Panel expects a single series.\n\nResponse:\n'+JSON.stringify(this.series);
+      throw error;
+    } else if (this.series.length!==2 && this.panel.deviation && this.panel.deviation.show) {
+      var error: any = new Error();
+      error.message = 'Deviation SingleStat should have exactly two series.';
+      error.data = 'Metric query returns ' + this.series.length +
+            ' series. Single Stat Panel Deviation expects a two series.\n\nResponse:\n'+JSON.stringify(this.series);
       throw error;
     }
 
@@ -203,6 +221,15 @@ class SingleStatCtrl extends MetricsPanelCtrl {
 
         var decimalInfo = this.getDecimalsForValue(data.value);
         var formatFunc = kbn.valueFormats[this.panel.format];
+        var devFormatFunc = kbn.valueFormats['percent'];
+        if (this.series.length > 1 && this.panel.deviation && this.panel.deviation.show) {
+          var value2 = this.series[1].stats[this.panel.valueName];
+          var flotpairs = this.series[1].flotpairs;
+          var deviation = ((data.value - value2)/value2)*100;
+          var decimalInfoDeviation = this.getDecimalsForDeviation(deviation);
+          data.deviationFormated = devFormatFunc(deviation, decimalInfoDeviation.decimals, decimalInfoDeviation.scaledDecimals);
+          data.deviationRounded = kbn.roundValue(deviation, decimalInfoDeviation.decimals);
+        }
         data.valueFormated = formatFunc(data.value, decimalInfo.decimals, decimalInfo.scaledDecimals);
         data.valueRounded = kbn.roundValue(data.value, decimalInfo.decimals);
       }
@@ -306,6 +333,33 @@ class SingleStatCtrl extends MetricsPanelCtrl {
       return valueString;
     }
 
+    function applyColoringThresholdsDeviation(value, valueString) {
+      var color = getColorForDeviation(value);
+      if (color) {
+        return '<span style="color:' + color + '">  ['+ valueString + getDeviationArrow(value) +']</span>';
+      }
+
+      return valueString;
+    }
+
+    function getDeviationArrow(value) {
+      if (value > 0.00) {
+        return '▲';
+      } else if (value < 0.0) {
+        return '▼';
+      }
+      return "";
+    }
+
+    function getColorForDeviation(value) {
+      if (value > 0.0) {
+        return "green";
+      } else if (value < 0.0) {
+        return "red";
+      }
+      return null;
+    }
+
     function getSpan(className, fontSize, value)  {
       value = templateSrv.replace(value, data.scopedVars);
       return '<span class="' + className + '" style="font-size:' + fontSize + '">' +
@@ -321,6 +375,11 @@ class SingleStatCtrl extends MetricsPanelCtrl {
       body += getSpan('singlestat-panel-value', panel.valueFontSize, value);
 
       if (panel.postfix) { body += getSpan('singlestat-panel-postfix', panel.postfixFontSize, panel.postfix); }
+
+      if (panel.deviation && panel.deviation.show) {
+        var deviation = applyColoringThresholdsDeviation(data.deviationRounded,data.deviationFormated);
+        body += getSpan("singlestat-panel-postfix",panel.deviation.fontSize,deviation);
+      }
 
       body += '</div>';
 

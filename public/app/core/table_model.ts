@@ -18,6 +18,12 @@ export default class TableModel {
     this.rows.sort(function(a, b) {
       a = a[options.col];
       b = b[options.col];
+      if (a === undefined) {
+        return -1;
+      }
+      if (b === undefined) {
+        return 1;
+      }
       if (a < b) {
         return -1;
       }
