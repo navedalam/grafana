@@ -301,6 +301,26 @@
 				</div>
 			</div>
 
+			<div ng-if="current.type === 'http'" class="gf-form-group">
+				<h5 class="section-heading">HTTP Options</h5>
+
+				<div class="gf-form">
+					<span class="gf-form-label width-7">URL</span>
+					<input type="text" class="gf-form-input" ng-model='current.query' placeholder="url for the templates" ng-model-onblur ng-change="runQuery()" required></input>
+				</div>
+			</div>
+			<div class="gf-form max-width-21">
+				<span class="gf-form-label width-7">
+					Refresh
+					<info-popover mode="right-normal">
+						When to update the values of this variable.
+					</info-popover>
+				</span>
+				<div class="gf-form-select-wrapper max-width-14">
+					<select class="gf-form-input" ng-model="current.refresh" ng-options="f.value as f.text for f in refreshOptions"></select>
+				</div>
+			</div>
+
 			<div class="gf-form-group" ng-show="current.options.length">
 				<h5>Preview of values (shows max 20)</h5>
 				<div class="gf-form-inline">
