@@ -62,6 +62,13 @@ function (angular, _, kbn) {
       return [];
     };
 
+    this.httpFormat = function(value) {
+      if (typeof value === 'string') {
+        return value;
+      }
+      return value.join(' OR ');
+    };
+
     function luceneEscape(value) {
       return value.replace(/([\!\*\+\-\=<>\s\&\|\(\)\[\]\{\}\^\~\?\:\\/"])/g, "\\$1");
     }
@@ -94,6 +101,9 @@ function (angular, _, kbn) {
           return '(' + escapedValues.join('|') + ')';
         }
         case "lucene": {
+          if (variable.type === 'http') {
+            return this.httpFormat(value,format,variable);
+          }
           return this.luceneFormat(value, format, variable);
         }
         case "pipe": {
