@@ -276,6 +276,11 @@ coreModule.directive('grafanaGraph', function($rootScope, timeSrv) {
         for (let i = 0; i < data.length; i++) {
           var series = data[i];
           series.data = series.getFlotPairs(series.nullPointMode || panel.nullPointMode);
+          if (panel.targets[showSeriesMarkers[i]] && panel.targets[showSeriesMarkers[i]].marker) {
+            series.marker = panel.targets[showSeriesMarkers[i]].marker;
+          } else {
+            series.marker = false;
+          }
 
           if (panel.targets[showSeriesMarkers[i]] && panel.targets[showSeriesMarkers[i]].marker) {
             series.marker = panel.targets[showSeriesMarkers[i]].marker;
