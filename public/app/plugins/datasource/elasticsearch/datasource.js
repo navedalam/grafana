@@ -219,7 +219,7 @@ function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticRes
 
         var queryString = templateSrv.replace(target.query || '*', options.scopedVars, 'lucene');
         queryString = queryString.replace(" and ", " AND ").replace(" or "," OR ").replace(" not "," NOT ");
-        queryString = queryString.replace(new RegExp("[AND |OR |OR NOT |AND NOT ]*[A-Za-z_0-9]*:aRemoveWildcarda","gm"),"");
+        queryString = queryString.replace(new RegExp("[AND |OR |OR NOT |AND NOT ]*[A-Za-z_0-9]*:RemoveWildcard","gm"),"");
         queryString = queryString.trim();
         if(queryString.startsWith('AND') || queryString.startsWith("OR")){
           queryString = queryString.substr(queryString.indexOf(" ") + 1);
@@ -238,11 +238,22 @@ function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticRes
         var tempPayload="";
         if(target.metrics) {
           if(target.metrics[0].type === 'calc_metric') {
+            for(var mtdTarget = 0; mtdTarget < options.mtd.targetList.length; mtdTarget++) {
+              options.mtd.queryList[mtdTarget] = options.mtd.queryList[mtdTarget].replace(/\$__interval/g,"10000d");
+              options.mtd.queryList[mtdTarget] = options.mtd.queryList[mtdTarget].replace(/\$timeFrom/g,time.getMonthStartTime(options.range.to.valueOf()/1000));
+              options.mtd.queryList[mtdTarget] = options.mtd.queryList[mtdTarget].replace(/\$timeTo/g, options.range.to.valueOf() + 5.5*3600000);
+              sentTargets.push(options.mtd.targetList[mtdTarget]);
+              payload += options.mtd.queryList[mtdTarget];
+            }
+            options.mtd.offset = options.mtd.queryList.length;
+            options.mtd.queryList = [];
+            options.mtd.targetList = [];
+
             tempPayload += "";
             if(!target.metrics[0].formula || target.metrics[0].formula === "") {
               target.metrics[0].formula = "query1 * 1";
             }
-            options.calcMetric.queries.push(i);
+            options.calcMetric.queries.push(i + options.mtd.offset);
             options.calcMetric.formulas.push(target.metrics[0].formula);
             if(target.bucketAggs[0].type === "date_histogram") {
               options.calcMetric.typeDate.push(true);
@@ -259,18 +270,34 @@ function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticRes
           }
 
         }
+        if(target.mtd === true) {
+          var tempTarget = angular.copy(target);
+          tempTarget.alias = tempTarget.alias + " MTD";
+          tempTarget.isMTD = true;
+          tempTarget.isMTDOf = i;
+          options.mtd.queryList.push(tempPayload);
+          options.mtd.targetList.push(tempTarget);
+        }
         if(target.timeShiftComparison && target.timeShiftComparison !== "") {
-          tempPayload = tempPayload.replace(/\$interval/g, options.interval);
+          tempPayload = tempPayload.replace(/\$__interval/g, options.interval);
           tempPayload = tempPayload.replace(/\$timeFrom/g, options.range.from.valueOf() - time.calcTimeShift(target.timeShiftComparison) + 5.5*3600000);
           tempPayload = tempPayload.replace(/\$timeTo/g, options.range.to.valueOf() - time.calcTimeShift(target.timeShiftComparison)  + 5.5*3600000);
           options.timeShift[i] = time.calcTimeShift(target.timeShiftComparison);
         } else {
-          tempPayload = tempPayload.replace(/\$interval/g, options.interval);
+          tempPayload = tempPayload.replace(/\$__interval/g, options.interval);
           tempPayload = tempPayload.replace(/\$timeFrom/g, options.range.from.valueOf() + 5.5*3600000);
           tempPayload = tempPayload.replace(/\$timeTo/g, options.range.to.valueOf() + 5.5*3600000);
         }
         payload += tempPayload;
         sentTargets.push(target);
+      }
+
+      for(var mtdTarget = 0; mtdTarget < options.mtd.targetList.length; mtdTarget++) {
+        options.mtd.queryList[mtdTarget] = options.mtd.queryList[mtdTarget].replace(/\$__interval/g,"10000d");
+        options.mtd.queryList[mtdTarget] = options.mtd.queryList[mtdTarget].replace(/\$timeFrom/g,time.getMonthStartTime(options.range.to.valueOf()/1000));
+        options.mtd.queryList[mtdTarget] = options.mtd.queryList[mtdTarget].replace(/\$timeTo/g, options.range.to.valueOf() + 5.5*3600000);
+        sentTargets.push(options.mtd.targetList[mtdTarget]);
+        payload += options.mtd.queryList[mtdTarget];
       }
 
       if (sentTargets.length === 0) {
@@ -289,6 +316,12 @@ function (angular, _, moment, kbn, ElasticQueryBuilder, IndexPattern, ElasticRes
               tmp[key]['key'] = tmp[key]['key']+ options.timeShift[i];
               tmp[key]['key_as_string'] = tmp[key]['key'].toString();
             });
+          }
+          if(sentTargets[i].isMTD) {
+            var tempResponse = res.responses[sentTargets[i].isMTDOf].aggregations[2].buckets;
+            res.responses[i].aggregations[2].buckets[0].key = tempResponse[tempResponse.length-1].key;
+            res.responses[i].aggregations[2].buckets[0].key_as_string = tempResponse[tempResponse.length-1].key_as_string;
+
           }
         }
         if(options.calcMetric.status) {

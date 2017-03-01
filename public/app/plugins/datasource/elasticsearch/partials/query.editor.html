@@ -17,7 +17,10 @@
 			<label class="gf-form-label query-keyword">Show Markers</label>
 			<input type="checkbox" class="tight-form-input" style="width: 80px;" ng-model="ctrl.target.marker" spellcheck='false' placeholder="(Y=show)" ng-blur="ctrl.refresh()">
 		</div>
-
+		<div class="gf-form max-width-6">
+			<label class="gf-form-label query-keyword">MTD</label>
+			<input type="checkbox" class="tight-form-input" style="width: 80px;" ng-model="ctrl.target.mtd" spellcheck='false' placeholder="(Y=show)" ng-blur="ctrl.refresh()">
+		</div>
 	</div>
 
 	<div ng-repeat="agg in ctrl.target.metrics">
