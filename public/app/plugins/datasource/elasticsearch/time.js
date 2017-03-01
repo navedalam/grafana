@@ -41,5 +41,13 @@ function() {
   time.timeZoneShift = function() {
     return 5.5*60*60*1000;
   };
+
+  time.getMonthStartTime = function(epochTime) {
+    var d = new Date(0);
+    d.setUTCSeconds(epochTime);
+    var firstDay = new Date(d.getUTCFullYear(), d.getUTCMonth(), 1);
+    return new Date(firstDay.getTime() - firstDay.getTimezoneOffset() * 60000).getTime();
+  };
+
   return time;
 });
