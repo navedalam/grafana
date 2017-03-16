@@ -535,6 +535,7 @@ function($, _) {
   kbn.valueFormats.litre  = kbn.formatBuilders.decimalSIPrefix('L');
   kbn.valueFormats.mlitre = kbn.formatBuilders.decimalSIPrefix('L', -1);
   kbn.valueFormats.m3     = kbn.formatBuilders.decimalSIPrefix('m3');
+  kbn.valueFormats.dm3    = kbn.formatBuilders.decimalSIPrefix('dm3');
   kbn.valueFormats.gallons  = kbn.formatBuilders.fixedUnit('gal');
 
   // Flow
@@ -854,10 +855,11 @@ function($, _) {
       {
         text: 'volume',
         submenu: [
-          {text: 'millilitre',  value: 'mlitre' },
-          {text: 'litre',       value: 'litre'  },
-          {text: 'cubic metre', value: 'm3'     },
-          {text: 'gallons',     value: 'gallons'},
+          {text: 'millilitre',      value: 'mlitre' },
+          {text: 'litre',           value: 'litre'  },
+          {text: 'cubic metre',     value: 'm3'     },
+          {text: 'cubic decimetre', value: 'dm3'    },
+          {text: 'gallons',         value: 'gallons'},
         ]
       },
       {
