@@ -524,8 +524,8 @@ class SingleStatCtrl extends MetricsPanelCtrl {
         xaxis: {
           show: false,
           mode: "time",
-          min: ctrl.range.from.valueOf(),
-          max: ctrl.range.to.valueOf(),
+          min: ctrl.range.from.valueOf() + 19800000,
+          max: ctrl.range.to.valueOf() + 19800000,
         },
         grid: { hoverable: false, show: false },
       };

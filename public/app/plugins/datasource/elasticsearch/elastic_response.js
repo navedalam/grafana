@@ -271,7 +271,7 @@ function (_, queryDef,time) {
 
       if (hit._source) {
         for (propName in hit._source) {
-          if (doc[propName] in aliasDictionary) {
+          if (propName in aliasDictionary) {
             doc[aliasDictionary[propName]] = hit._source[propName];
           } else {
             doc[propName] = hit._source[propName];

@@ -163,6 +163,9 @@ function (angular, _, kbn) {
         return 'RemoveWildcard';
       } else if (variable.allValue) {
         return variable.allValue;
+      } else if (variable.current.value === "$__all"
+        || (Array.isArray(variable.current.value) && variable.current.value[0] === "$__all")) {
+        return 'RemoveWildcard';
       }
       var values = [];
       for (var i = 1; i < variable.options.length; i++) {

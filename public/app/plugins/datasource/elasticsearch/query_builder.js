@@ -228,8 +228,10 @@ function (queryDef) {
         } else {
           continue;
         }
-      } else {
+      } else if(metric.type === "cardainality") {
         metricAgg = {field: metric.field, precision_threshold: 10000};
+      } else {
+        metricAgg = {field: metric.field};
       }
 
       for (var prop in metric.settings) {
